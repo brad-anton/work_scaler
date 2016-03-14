@@ -35,11 +35,12 @@ python work_scaler/Server/Server.py
 ```
 
 ### Running Clients
-This example comes with two Clients, `CrawlerClient.py` and `DnsClient.py`. If you'd like to test out `DnsClient.py`, modify `Server.py` to instantiate the Server with the `dns` variable. 
+Run as many instances of the client on as many systems as you would like, but be sure you have enough work to keep them busy. 
 ```
 python work_scaler/Client/CrawlerClient.py
 ```
 
+This example comes with two Clients, `CrawlerClient.py` and `DnsClient.py`. If you'd like to test out `DnsClient.py`, modify `Server.py` to instantiate the Server with the `dns` variable. 
 ## Important Settings
 ### `WORKER_TIMEOUT`
 
