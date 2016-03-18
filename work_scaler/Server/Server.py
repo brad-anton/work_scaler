@@ -1,3 +1,4 @@
+
 """Server.py
 @brad_anton
 
@@ -21,12 +22,9 @@ from collections import deque
 WORKER_TIMEOUT = 90 
 
 class Server:
-    def __init__(self, work, server='*', recv_port=5578, send_port=5577):
+    def __init__(self, work=None, server='*', recv_port=5578, send_port=5577, feeder_server='localhost', feeder_port=5576):
         self.server_id = str(uuid4())
-
-        self.work_q = deque(work)
-        self.workers = {}
-
+        
         self.server = server 
         self.context = zmq.Context()
 
@@ -41,13 +39,33 @@ class Server:
         # Setup Poller
         self.poller = zmq.Poller()
         self.poller.register(self.recv_s)
+      
+        self.workers = {}
+
+        self.feeder_s = None
+
+        if work:
+            # Work is provided during instantiation
+            self.work_q = deque(work)
+        else:
+            # Work from ZMQ Feeder
+            print '[+] No work provided, preparing feeder queue'
+            self.work_q = deque()
+            self.feeder_server = feeder_server
+            self.feeder_p = feeder_port
+            self.feeder_s = self.context.socket(zmq.PULL)
+            self.poller.register(self.feeder_s)
 
     def send(self, client_id, msg, flags=0):
         self.send_s.send_string(client_id, flags=flags|zmq.SNDMORE)
         self.send_s.send_json(msg, flags=flags)
 
     def process_result(self, msg):
-        # TODO
+        # Override me! 
+        pass
+
+    def process_feeder(self, msg):
+        # Override me!
         pass
 
     def dispatcher(self):
@@ -92,6 +110,7 @@ class Server:
                         self.work_q.appendleft(worker['work'])
                     self.workers[client].remove(worker)
 
+
     def run(self):
         print "[+] Server {0} starting...".format(self.server_id)
 
@@ -100,6 +119,10 @@ class Server:
         """
         self.send_s.bind("tcp://{0}:{1}".format(self.server, self.send_p))
         self.recv_s.bind("tcp://{0}:{1}".format(self.server, self.recv_p))
+    
+        if not self.work_q:
+            # If empty at this stage in the game, its probably a feeder
+            self.feeder_s.connect("tcp://{0}:{1}".format(self.feeder_server, self.feeder_p))
 
         while True:
             self.dispatcher()
@@ -126,6 +149,10 @@ class Server:
                                     self.process_result(msg)
                                     # Clean up the worker
                                     self.workers[msg['client']].remove(worker)
+            elif (self.feeder_s in s
+                    and s[self.feeder_s] == zmq.POLLIN):
+                msg = self.feeder_s.recv_json()
+                gevent.spawn(self.process_feeder, msg)
 
 if __name__ == '__main__':
     """Work can be provided as individual 
@@ -145,4 +172,5 @@ if __name__ == '__main__':
             'http://www.google.com',
             'http://www.gevent.org']]
     s = Server(urls)
+    #s = Server()
     s.run()
